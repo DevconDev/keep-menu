@@ -5,6 +5,45 @@ const OpenMenu = (data) => {
     DrawButtons(data)
 }
 
+const CreateOverlay = (data) => {
+        let ele = document.querySelector('.info')
+            // @swkeep: changed context to subheader as i always do :)
+        let context = data.subheader ? data.subheader : ""
+        let footer = data.footer ? data.footer : ""
+        let element = $(`
+        <div class="info">
+            <div class="column">
+                <div class="row">
+                    ${data.icons['header'] ? `<div class="icon-o"> <i class="${data.icons['header']}"></i> </div>` : ""} 
+                    <div class="header"> ` + data.header + `</div>
+                </div>
+                <div class="row">
+                    ${data.icons['subheader'] ? `<div class="icon-o"> <i class="${data.icons['subheader']}"></i> </div>` : ""} 
+                    <div class="context">` + context + `</div>
+                </div>
+
+                <div class="row">
+                    ${data.icons['footer'] ? `<div class="icon-o"> <i class="${data.icons['footer']}"></i> </div>` : ""} 
+                    <div class="footer"> ` + footer + `</div>
+                </div>
+            </div>
+        </div>
+        `
+    );
+
+    if (ele != null) {
+        $('div.info').replaceWith(element);
+        
+    } else {
+        $('#infos').append(element);        
+    }
+}
+
+const CloseOverlay = () => {
+    let element = $(``);
+    $('div.info').replaceWith(element);
+};
+
 const CloseMenu = () => {
     $(".button").remove();
     $(".buttonDisabled").remove();
@@ -18,7 +57,7 @@ const DrawButtons = (data) => {
             let context = data[i].subheader ? data[i].subheader : ""
             let footer = data[i].footer ? data[i].footer : ""
             let element = $(`
-            <div class="${data[i].disabled ? "buttonDisabled" : "button"}" id=` + i + `>
+            <div class="${data[i].disabled ? "buttonDisabled" : "button"} ${data[i].is_header ? "is-header" : ""}" id=` + i + `>
             <!-- @swkeep: added back/leave/icon -->
             ${data[i].back && !data[i].disabled  ? `<div class="icon"> <i class="fa-solid fa-angle-left"></i> </div>` : ""}
             ${data[i].leave && !data[i].disabled && !data[i].back  ? `<div class="icon"> <i class="fa-solid fa-circle-xmark"></i> </div>` : ""}
@@ -43,9 +82,16 @@ $(document).click(function (event) {
     let $target = $(event.target);
     if ($target.closest('.button').length && $('.button').is(":visible")) {
         let id = event.target.id;
-        if (Button[id].disabled) return;
-        if (!Button[id].event && !Button[id].args) return;
+        if (Button[id].disabled || false) return;
+        // <!-- @swkeep: support for no args actions -->
+        if (Button[id].is_header || false) return;
+
+        if (!Button[id].event && !Button[id].action && !Button[id].leave &&!Button[id].args ) { 
+            console.warn('WARNING: No event or action to perform!');
+            return;
+        } 
         PostData(id)
+        
         document.getElementById('imageHover').style.display = 'none';
     }
 })
@@ -65,6 +111,10 @@ window.addEventListener("message", (evt) => {
     switch (action) {
         case "OPEN_MENU":
             return OpenMenu(info);
+        case "OPEN_OVERLAY":
+            return CreateOverlay(info);
+        case 'CLOSE_OVERLAY':
+            return CloseOverlay()
         case "CLOSE_MENU":
             return CloseMenu();
         case "CANCEL_MENU":
