@@ -1,6 +1,12 @@
-local QBCore = exports['qb-core']:GetCoreObject()
+local QBCore = nil
+if GetResourceState('qb-core') == 'started' then
+    QBCore = exports['qb-core']:GetCoreObject()
+end
+
 local Promise, ActiveMenu = nil, false
 local inventoryName = 'lj-inventory' -- @swkeep: make sure script using correct name
+local img = "nui://" .. inventoryName .. "/html/"
+
 
 RegisterNUICallback("dataPost", function(data, cb)
     local id = tonumber(data.id) + 1 or nil
@@ -19,14 +25,13 @@ RegisterNUICallback("dataPost", function(data, cb)
             return
         end
 
-        local args = rData.args
-        if rData.unpack then
-            args = table.unpack(rData.args or {})
-        end
-
         if rData.action then
             -- @swkeep: added action to trigger a function
-            rData.action(args)
+            if rData.unpack then
+                rData.action(table.unpack(rData.args or {}))
+            else
+                rData.action(rData.args)
+            end
         end
 
         -- this part should not triggered at all!
@@ -38,22 +43,39 @@ RegisterNUICallback("dataPost", function(data, cb)
 
         if rData.event and Promise == nil then
             -- @swkeep: added qbcore/fivem command
-
             if rData.server then
-                TriggerServerEvent(rData.event, args)
+                if rData.unpack then
+                    TriggerServerEvent(rData.event, table.unpack(rData.args or {}))
+                else
+                    TriggerServerEvent(rData.event, rData.args)
+                end
             elseif not rData.server then
-                TriggerEvent(rData.event, args)
+                if rData.unpack then
+                    TriggerEvent(rData.event, table.unpack(rData.args or {}))
+                else
+                    TriggerEvent(rData.event, rData.args)
+                end
+
             elseif rData.client then
-                TriggerEvent(rData.event, args)
+                if rData.unpack then
+                    TriggerEvent(rData.event, table.unpack(rData.args or {}))
+                else
+                    TriggerEvent(rData.event, rData.args)
+                end
             end
 
             if rData.command then
                 ExecuteCommand(rData.event)
             end
 
-            if rData.QBCommand then
-                TriggerServerEvent('QBCore:CallCommand', rData.event, args)
-                TriggerEvent(rData.event, args)
+            if QBCore and rData.QBCommand then
+                if rData.unpack then
+                    TriggerServerEvent('QBCore:CallCommand', rData.event, table.unpack(rData.args or {}))
+                    TriggerEvent(rData.event, rData.args)
+                else
+                    TriggerServerEvent('QBCore:CallCommand', rData.event, rData.args)
+                    TriggerEvent(rData.event, rData.args)
+                end
             end
         end
     end
@@ -124,16 +146,21 @@ end
 ProcessParams = function(data)
     for _, v in pairs(data) do
         if v.args and type(v.args) == "table" and next(v.args) ~= nil then
-            v.args = PackParams(v.args)
+            if not v.hide then
+                v.args = PackParams(v.args)
+            end
         end
         -- @swkeep: get images from user inventory
         if v.image then
-            local img = "nui://" .. inventoryName .. "/html/"
-            if QBCore.Shared.Items[tostring(v.image)] then
-                if not string.find(QBCore.Shared.Items[tostring(v.image)].image, "images/") then
-                    img = img .. "images/"
+            if QBCore then
+                if QBCore.Shared.Items[tostring(v.image)] then
+                    if not string.find(QBCore.Shared.Items[tostring(v.image)].image, "images/") then
+                        img = img .. "images/"
+                    end
+                    v.image = img .. QBCore.Shared.Items[tostring(v.image)].image
                 end
-                v.image = img .. QBCore.Shared.Items[tostring(v.image)].image
+            else
+                v.image = img .. v.image
             end
         end
     end
@@ -173,5 +200,5 @@ exports("CloseOverlay", CloseOverlay)
 RegisterNetEvent("keep-menu:createMenu", ContextMenu)
 RegisterNetEvent("keep-menu:closeMenu", CancelMenu)
 -- @swkeep: overlay
-RegisterNetEvent("keep-menu:createMenu", Overlay)
+RegisterNetEvent("keep-menu:Overlay", Overlay)
 RegisterNetEvent("keep-menu:closeOverlay", CloseOverlay)
