@@ -1,21 +1,30 @@
 local QBCore = nil
+local DevMode = false
 if GetResourceState('qb-core') == 'started' then
     QBCore = exports['qb-core']:GetCoreObject()
 end
 
 local Promise, ActiveMenu = nil, false
-local inventoryName = 'lj-inventory' -- @swkeep: make sure script using correct name
-local img = "nui://" .. inventoryName .. "/html/"
+local inventoryName = 'qb-inventory' -- @swkeep: make sure script using correct name
 
+-- if you're not using qbcore change this where your inventory's images are
+local img = "nui://" .. inventoryName .. "/html/images/"
 
 RegisterNUICallback("dataPost", function(data, cb)
     local id = tonumber(data.id) + 1 or nil
     -- @swkeep: added PlaySoundFrontend to play menu sfx
     PlaySoundFrontend(-1, 'Highlight_Cancel', 'DLC_HEIST_PLANNING_BOARD_SOUNDS', 1)
+    if not ActiveMenu then CloseMenu() return end
     local rData = ActiveMenu[id]
-
     if rData then
         if Promise ~= nil then
+            if rData.args then
+                rData.args['range'] = data.other_inputs
+            else
+                rData.args = {
+                    range = data.other_inputs
+                }
+            end
             Promise:resolve(rData.args)
             Promise = nil
         end
@@ -103,9 +112,14 @@ CreateMenu = function(data)
 end
 
 ContextMenu = function(data)
-    Wait(1) -- wait 1 frame or Promise wont be nil
+    Wait(1)
     if not data or Promise ~= nil then return end
-    while ActiveMenu do CloseMenu() Wait(1) end
+    if ActiveMenu then
+        CloseMenu()
+        while ActiveMenu do
+            Wait(10)
+        end
+    end
 
     Promise = promise.new()
 
@@ -129,7 +143,11 @@ CloseOverlay = function()
     })
 end
 
-CloseMenu = function()
+CloseMenu = function(cb)
+    if Promise ~= nil then
+        Promise:resolve(nil)
+        Promise = nil
+    end
     SetNuiFocus(false, false)
     SendNUIMessage({
         action = "CLOSE_MENU",
@@ -152,15 +170,18 @@ ProcessParams = function(data)
         end
         -- @swkeep: get images from user inventory
         if v.image then
-            if QBCore then
-                if QBCore.Shared.Items[tostring(v.image)] then
-                    if not string.find(QBCore.Shared.Items[tostring(v.image)].image, "images/") then
-                        img = img .. "images/"
-                    end
-                    v.image = img .. QBCore.Shared.Items[tostring(v.image)].image
-                end
+            local i, j = string.find(v.image, "http")
+            if i and j then
+                -- it a http or https
+                v.image = v.image -- do nothing :)
             else
-                v.image = img .. v.image
+                if QBCore then
+                    if QBCore.Shared.Items[tostring(v.image)] then
+                        v.image = img .. QBCore.Shared.Items[tostring(v.image)].image
+                    end
+                else
+                    v.image = img .. v.image
+                end
             end
         end
     end
@@ -202,3 +223,191 @@ RegisterNetEvent("keep-menu:closeMenu", CancelMenu)
 -- @swkeep: overlay
 RegisterNetEvent("keep-menu:Overlay", Overlay)
 RegisterNetEvent("keep-menu:closeOverlay", CloseOverlay)
+
+
+local function qb(menu)
+    local converted = {}
+
+    for key, item in pairs(menu) do
+        local temp_btn = {}
+        if item.header then
+            temp_btn.header = item.header
+        end
+
+        if item.txt then
+            temp_btn.subheader = item.txt
+        end
+
+        if item.icon then
+            temp_btn.icon = item.icon
+        end
+
+        if item.disabled then
+            temp_btn.disabled = item.disabled
+        end
+
+        if item.hidden then
+            temp_btn.hide = item.hidden
+        end
+
+        if item.isMenuHeader then
+            temp_btn.is_header = item.isMenuHeader
+        end
+
+        if item.params then
+            if item.params.args then
+                temp_btn.args = item.params.args
+                temp_btn.unpack = true
+            end
+
+            if item.params.event then
+                temp_btn.event = item.params.event
+            end
+
+            if item.params.event and item.params.type then
+                temp_btn.type = item.params.type
+                temp_btn.event = item.params.event
+            end
+
+            if temp_btn.event == 'qb-menu:closeMenu' then
+                temp_btn.event = 'keep-menu:closeMenu'
+            end
+        end
+        converted[key] = temp_btn
+    end
+
+    ContextMenu(converted)
+end
+
+exports("openMenu", qb)
+
+if DevMode then
+    local function landing()
+        local menu = {
+            {
+                header = 'Creator',
+                subheader = 'test test as subheader',
+                icon = 'fa-solid fa-industry',
+                disabled = true,
+                -- spacer = true
+            },
+            {
+                search = true,
+                disabled = false
+            },
+            {
+                pervious = true,
+                disabled = true,
+                action = function()
+                    print('pervious')
+                end
+            },
+            {
+                next = true,
+                action = function()
+                    print('next')
+                end
+            },
+            {
+                header = 'Exit Creator',
+                subheader = 'reset & close creator',
+                icon = 'fa-solid fa-trash',
+            },
+            {
+                header = 'Hover Url',
+                icon = 'fa-solid fa-person-through-window',
+                image = 'https://avatars.githubusercontent.com/u/49286776?v=4'
+            },
+            {
+                header = 'Hover Inventory',
+                icon = 'fa-solid fa-trash',
+                image = 'lockpick',
+                action = function(args)
+
+                end,
+                event = 'test:test',
+                args = { { test = 'test' }, 2 }
+            },
+            {
+                header = 'Creator',
+                subheader = 'test test as subheader',
+                range_slider = true,
+                name = 'money',
+                range = {
+                    min = 0,
+                    max = 10,
+                    step = 2,
+                    multiplier = 20,
+                }
+            },
+            {
+                header = 'Creator',
+                subheader = 'test test as subheader',
+                icon = 'fa-solid fa-sliders',
+                range_slider = true,
+                style = 'color:red;',
+                name = 'money2',
+                range = {
+                    min = 0,
+                    max = 100,
+                    step = 25,
+                    multiplier = 20,
+                    currency = true
+                }
+            },
+            {
+                header = 'Icon Test',
+                icon = 'fa-solid fa-users-between-lines',
+            },
+            {
+                header = 'Icon Test',
+                icon = 'fa-solid fa-tag',
+            },
+        }
+
+        for i = 1, 100, 1 do
+            menu[#menu + 1] = {
+                header = 'search for (' .. math.random(0, 1000) .. ')',
+                subheader = 'reset & close creator',
+                footer = i * i,
+                icon = 'fa-solid fa-trash',
+                searchable = true,
+                style = ('background:rgb(%s,%s,%s)'):format(math.random(50, 150), math.random(50, 150),
+                    math.random(50, 150))
+            }
+        end
+        exports['keep-menu']:createMenu(menu)
+    end
+
+    RegisterKeyMapping('+testmenu', 'test menu', 'keyboard', 'o')
+    RegisterCommand('+testmenu', function()
+        if not IsPauseMenuActive() then
+            landing()
+        end
+    end, false)
+
+    CreateThread(function()
+
+        Wait(500)
+        landing()
+    end)
+
+    AddEventHandler('test:test', function(args)
+        print(args)
+    end)
+end
+
+RegisterNUICallback("mouse:move:sfx", function(data, cb)
+    PlaySoundFrontend(-1, 'Continue_Appears', 'DLC_HEIST_PLANNING_BOARD_SOUNDS', 1)
+    cb("ok")
+end)
+
+RegisterNUICallback("mouse:search_found:sfx", function(data, cb)
+    PlaySoundFrontend(-1, 'Hack_Success', 'DLC_HEIST_BIOLAB_PREP_HACKING_SOUNDS', 1)
+    cb("ok")
+end)
+
+RegisterNUICallback("mouse:search_not_found:sfx", function(data, cb)
+    PlaySoundFrontend(-1, 'Hack_Failed', 'DLC_HEIST_BIOLAB_PREP_HACKING_SOUNDS', 1)
+    cb("ok")
+end)
